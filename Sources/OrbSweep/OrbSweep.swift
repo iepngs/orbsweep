@@ -158,6 +158,10 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) { Circle().fill(teal).frame(width: 6, height: 6); Text("仅操作 OrbStack") }
                 Text("Docker context · orbstack").foregroundStyle(.white.opacity(0.45)).font(.system(size: 10, design: .monospaced))
+                Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版")")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.top, 6)
             }.font(.system(size: 12))
         }
         .padding(22).frame(width: 220).frame(maxHeight: .infinity)
