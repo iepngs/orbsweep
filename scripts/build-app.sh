@@ -36,6 +36,5 @@ PLIST
 swift scripts/make-icon.swift "$PWD/.build/AppIcon.iconset"
 iconutil -c icns .build/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$APP"
-codesign --verify --strict "$APP"
-lipo -info "$APP/Contents/MacOS/OrbSweep"
+bash scripts/verify-app.sh "$APP"
 echo "Built: $APP"

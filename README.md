@@ -85,6 +85,7 @@ Sources/OrbSweep/             SwiftUI 界面与应用入口
 Tests/CleanupCoreTests/       可独立运行的安全检查
 scripts/build-app.sh          编译与 .app 打包
 scripts/make-icon.swift       生成应用图标
+scripts/verify-app.sh         验证签名和通用架构
 Makefile                     本地构建入口
 .github/workflows/release.yml 自动编译与发布
 ```

@@ -35,9 +35,7 @@ jobs:
         run: make package UNIVERSAL=1 VERSION="$APP_VERSION"
 
       - name: Verify bundle and architecture
-        run: |
-          codesign --verify --deep --strict dist/OrbSweep.app
-          lipo dist/OrbSweep.app/Contents/MacOS/OrbSweep -verify_arch arm64 x86_64
+        run: UNIVERSAL=1 bash scripts/verify-app.sh
 
       - name: Publish GitHub Release
         env:
