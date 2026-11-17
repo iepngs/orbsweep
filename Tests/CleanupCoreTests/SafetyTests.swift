@@ -14,6 +14,7 @@ struct SafetyTests {
         tests.resourceDeletionNeverForcesAndPreservesIDsAsArguments()
         tests.diskCapacityHandlesBoundaryValues()
         try tests.systemDiskCanBeReadWithoutDocker()
+        try UpdateTests.run()
         try tests.liveReadOnlyScan()
         print("PASS: all safety checks")
     }

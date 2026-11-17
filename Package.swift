@@ -7,7 +7,8 @@ let package = Package(
     products: [.executable(name: "OrbSweep", targets: ["OrbSweep"])],
     targets: [
         .target(name: "CleanupCore"),
-        .executableTarget(name: "OrbSweep", dependencies: ["CleanupCore"]),
-        .executableTarget(name: "SafetyChecks", dependencies: ["CleanupCore"], path: "Tests/CleanupCoreTests")
+        .target(name: "UpdateCore"),
+        .executableTarget(name: "OrbSweep", dependencies: ["CleanupCore", "UpdateCore"]),
+        .executableTarget(name: "SafetyChecks", dependencies: ["CleanupCore", "UpdateCore"], path: "Tests/CleanupCoreTests")
     ]
 )

@@ -81,9 +81,10 @@ final class CleanupModel: ObservableObject {
 @main
 struct OrbSweepApp: App {
     @StateObject private var model = CleanupModel()
+    @StateObject private var updater = AppUpdater()
     var body: some Scene {
         WindowGroup("OrbSweep") {
-            ContentView(model: model)
+            ContentView(model: model, updater: updater)
                 .frame(minWidth: 1040, minHeight: 740)
         }
         .defaultSize(width: 1120, height: 920)
@@ -92,7 +93,11 @@ struct OrbSweepApp: App {
             CommandMenu("清理") {
                 Button("重新扫描") { model.scan() }
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(model.busy)
+                    .disabled(model.busy || updater.isInstalling)
+            }
+            CommandGroup(after: .appInfo) {
+                Button("检查更新…") { updater.check() }
+                    .disabled(model.busy || updater.working)
             }
         }
     }
@@ -100,6 +105,7 @@ struct OrbSweepApp: App {
 
 struct ContentView: View {
     @ObservedObject var model: CleanupModel
+    @ObservedObject var updater: AppUpdater
     @StoredState private var focused: CleanupCore.Category = .images
     @StoredState private var confirming = false
     @StoredState private var volumeConsent = false
@@ -133,6 +139,9 @@ struct ContentView: View {
         }
         .task { if model.snapshot == nil { model.scan() } }
         .sheet(isPresented: $confirming) { confirmation }
+        .sheet(isPresented: $updater.presented, onDismiss: { updater.finishInstallation() }) {
+            AppUpdateView(updater: updater, cleanupBusy: model.busy)
+        }
     }
 
     private var sidebar: some View {
@@ -158,10 +167,15 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) { Circle().fill(teal).frame(width: 6, height: 6); Text("仅操作 OrbStack") }
                 Text("Docker context · orbstack").foregroundStyle(.white.opacity(0.45)).font(.system(size: 10, design: .monospaced))
-                Text("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发版")")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .padding(.top, 6)
+                HStack {
+                    Text("版本 \(updater.currentVersion)")
+                        .foregroundStyle(.white.opacity(0.45))
+                    Spacer(minLength: 4)
+                    Button("检查更新") { updater.check() }
+                        .buttonStyle(.plain).foregroundStyle(teal)
+                        .disabled(model.busy || updater.working)
+                }
+                .font(.system(size: 11, design: .rounded)).padding(.top, 6)
             }.font(.system(size: 12))
         }
         .padding(22).frame(width: 220).frame(maxHeight: .infinity)

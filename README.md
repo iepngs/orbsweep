@@ -16,6 +16,14 @@
 
 应用使用本机 ad-hoc 签名，尚未使用 Apple Developer ID 签名或公证；从 GitHub 下载后可能需要在 macOS「系统设置 → 隐私与安全性」中批准打开。
 
+### App 内更新
+
+左下角版本号旁的「检查更新」，或 OrbSweep 菜单里的「检查更新…」，会查询本仓库最新的正式 Release。发现新版后显示版本、更新说明和安装包大小，点击「安装并重启」即可下载并替换当前 App。不会后台自动下载或安装；扫描、清理期间更新入口不可用。
+
+更新使用现有 CI 发布的 universal ZIP，无需另外维护更新源。安装前核对 GitHub Release 的 SHA-256、安装包目录结构、Bundle ID、版本、macOS 最低版本与代码签名；下载或验证失败会保留当前 App。替换或打开失败时尝试恢复旧 App，安装日志在 `~/Library/Logs/OrbSweep-update.log`。
+
+请将 App 放在有写入权限的「应用程序」目录中；只读磁盘映像或无写入权限的位置无法原地更新。当前使用 GitHub HTTPS 与附件摘要验证下载来源和完整性，ad-hoc 签名不提供 Developer ID 开发者身份验证。旧版没有更新入口，需要先手动安装一次包含此功能的版本。
+
 ## 使用
 
 1. 打开应用，等待只读扫描完成。
@@ -61,7 +69,7 @@ make app
 | --- | --- |
 | `make app` | 编译当前 Mac 架构，生成应用图标与 Info.plist，并签名验证 |
 | `make run` | 编译并打开应用 |
-| `make check` | 检查容器状态保护、volume 引用保护、非强制删除及参数传递，无需 OrbStack |
+| `make check` | 检查清理安全规则、更新版本比较、摘要校验、目录保护及安装回滚，无需 OrbStack |
 | `make check-live` | 上述检查加 OrbStack 实机只读扫描，不执行删除 |
 | `make package VERSION=1.0.0 UNIVERSAL=1` | 编译 Apple Silicon + Intel 通用应用并生成 ZIP |
 | `make clean` | 删除编译缓存和 `dist` 下的构建产物 |
@@ -83,6 +91,7 @@ make app
 
 ```text
 Sources/CleanupCore/          Docker 调用、扫描、清理规则
+Sources/UpdateCore/           Release 校验、安装包验证与更新替换
 Sources/OrbSweep/             SwiftUI 界面与应用入口
 Tests/CleanupCoreTests/       可独立运行的安全检查
 scripts/build-app.sh          编译与 .app 打包
