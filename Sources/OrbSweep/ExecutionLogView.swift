@@ -54,7 +54,7 @@ struct ExecutionLogView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 14).padding(.vertical, 12)
                 }
-                .frame(height: 120)
+                .frame(minHeight: 36, idealHeight: 90, maxHeight: 120)
                 .accessibilityLabel("执行记录内容")
             }
         }
