@@ -250,20 +250,33 @@ struct ContentView: View {
     }
 
     private var categories: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("选择清理类别").font(.system(size: 13, weight: .semibold)).padding(.bottom, 3)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 0) {
+            Label("选择清理类别", systemImage: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16).padding(.vertical, 13)
+            Divider().padding(.horizontal, 16)
             ScrollView {
-                categoryOptions.padding(1)
+                categoryOptions.padding(.horizontal, 10).padding(.vertical, 8)
             }
-            Text("删除容器后才变为空闲的资源，会在下次扫描中显示，需再次确认清理。")
-                .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(3).padding(.top, 4)
-                .fixedSize(horizontal: false, vertical: true)
+            Divider().padding(.horizontal, 16)
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "info.circle").foregroundStyle(teal)
+                Text("删除容器后才变为空闲的资源，会在下次扫描中显示，需再次确认清理。")
+                    .foregroundStyle(.secondary).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.system(size: 10))
+            .padding(.horizontal, 16).padding(.vertical, 12)
         }
+        .frame(maxHeight: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.06)))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var categoryOptions: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(CleanupCategory.allCases) { category in
                 HStack(spacing: 10) {
                     Toggle("清理\(category.title)", isOn: Binding(
@@ -280,12 +293,15 @@ struct ContentView: View {
                             }
                             Spacer(minLength: 0)
                             Text("\(model.snapshot?[category].count ?? 0)")
-                                .font(.system(size: 12, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(focused == category ? teal : .secondary)
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(focused == category ? teal.opacity(0.1) : Color.primary.opacity(0.04), in: Capsule())
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
-                }.padding(12)
-                    .background(focused == category ? teal.opacity(0.09) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(focused == category ? teal.opacity(0.4) : .clear))
+                }.padding(10)
+                    .background(focused == category ? teal.opacity(0.09) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(focused == category ? teal.opacity(0.3) : .clear))
             }
         }
     }
