@@ -1,0 +1,57 @@
+name: Build and release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/master'
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set release version
+        run: echo "APP_VERSION=1.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Check safety rules
+        run: make check
+
+      - name: Build universal application and package
+        run: make package UNIVERSAL=1 VERSION="$APP_VERSION"
+
+      - name: Verify bundle and architecture
+        run: |
+          codesign --verify --deep --strict dist/OrbSweep.app
+          lipo -verify_arch arm64 x86_64 dist/OrbSweep.app/Contents/MacOS/OrbSweep
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="v${APP_VERSION}"
+          asset="dist/OrbSweep-${APP_VERSION}-macOS-universal.zip"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # Re-running the same workflow updates its asset without a duplicate release.
+            gh release upload "$tag" "$asset" --clobber
+          else
+            gh release create "$tag" "$asset" \
+              --target "$GITHUB_SHA" \
+              --title "OrbSweep ${APP_VERSION}" \
+              --generate-notes
+          fi
