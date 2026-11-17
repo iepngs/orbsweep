@@ -11,7 +11,8 @@ final class CleanupModel: ObservableObject {
     @Published var snapshot: Snapshot?
     @Published var disk: SystemDisk?
     @Published var diskError: String?
-    @Published var selected: Set<CleanupCore.Category> = [.images, .networks, .cache]
+    @Published var selected: Set<CleanupCore.Category> = []
+    private var hasInitializedSelection = false
     @Published var busy = false
     @Published var status = "准备扫描 OrbStack"
     @Published var error: String?
@@ -25,6 +26,10 @@ final class CleanupModel: ObservableObject {
             await refreshDisk()
             do {
                 let result = try await Task.detached { try DockerClient().scan() }.value
+                if !hasInitializedSelection {
+                    selected = Set(CleanupCategory.allCases.filter { !result[$0].isEmpty })
+                    hasInitializedSelection = true
+                }
                 snapshot = result; status = "扫描完成"
             } catch {
                 self.error = error.localizedDescription
@@ -261,12 +266,10 @@ struct ContentView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer(minLength: 0)
-                Button("全选") { model.selected = Set(CleanupCategory.allCases) }
-                    .help("选中全部五个清理类别")
-                Button("反选") {
+                Button("全选/反选") {
                     model.selected = Set(CleanupCategory.allCases).subtracting(model.selected)
                 }
-                .help("切换全部清理类别的勾选状态")
+                .help("反转五个类别的勾选状态；未勾选任何类别时全选")
             }
             .font(.system(size: 11))
             .buttonStyle(.plain).foregroundStyle(teal)
