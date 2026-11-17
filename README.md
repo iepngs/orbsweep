@@ -4,6 +4,8 @@
 
 一个用 SwiftUI 编写的 macOS 原生 OrbStack 清理工具。扫描容器、镜像、数据卷、网络和构建缓存，预览待删除内容，再按类别清理。
 
+顶部的系统磁盘卡片显示启动磁盘总容量、已使用和剩余空间，并用进度条呈现占用比例。占用达到 85% 时显示橙色、95% 时显示红色；随扫描和清理更新，即使 OrbStack 未启动也能读取。容量采用 macOS 文件系统提供的实际空闲空间，已使用 = 总容量 − 剩余空间；APFS 共享空间、快照和可清除数据可能导致结果与 Finder 的「可用」容量不同。
+
 ## 下载与运行
 
 在 [Releases](https://github.com/iepngs/orbsweep/releases) 下载 `OrbSweep-<版本>-macOS-universal.zip`，解压后双击 `OrbSweep.app`，也可以把它拖到「应用程序」目录。

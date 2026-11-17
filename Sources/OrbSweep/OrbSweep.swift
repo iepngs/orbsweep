@@ -9,6 +9,8 @@ private typealias StoredState<Value> = SwiftUI.State<Value>
 @MainActor
 final class CleanupModel: ObservableObject {
     @Published var snapshot: Snapshot?
+    @Published var disk: SystemDisk?
+    @Published var diskError: String?
     @Published var selected: Set<CleanupCore.Category> = [.images, .networks, .cache]
     @Published var busy = false
     @Published var status = "准备扫描 OrbStack"
@@ -20,6 +22,7 @@ final class CleanupModel: ObservableObject {
         guard !busy else { return }
         busy = true; error = nil; status = "正在扫描…"
         Task {
+            await refreshDisk()
             do {
                 let result = try await Task.detached { try DockerClient().scan() }.value
                 snapshot = result; status = "扫描完成"
@@ -28,6 +31,16 @@ final class CleanupModel: ObservableObject {
                 snapshot = nil; status = "无法连接或读取 OrbStack，请启动后重试"
             }
             busy = false
+        }
+    }
+
+    private func refreshDisk() async {
+        do {
+            disk = try await Task.detached { try SystemDisk.read() }.value
+            diskError = nil
+        } catch {
+            disk = nil
+            diskError = error.localizedDescription
         }
     }
 
@@ -54,6 +67,7 @@ final class CleanupModel: ObservableObject {
                 self.error = error.localizedDescription
                 status = "执行结束，请重新扫描确认状态"
             }
+            await refreshDisk()
             busy = false
         }
     }
@@ -67,7 +81,7 @@ struct OrbSweepApp: App {
             ContentView(model: model)
                 .frame(minWidth: 1040, minHeight: 740)
         }
-        .defaultSize(width: 1120, height: 820)
+        .defaultSize(width: 1120, height: 920)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("清理") {
@@ -92,6 +106,7 @@ struct ContentView: View {
             sidebar
             VStack(alignment: .leading, spacing: 18) {
                 header
+                diskOverview
                 if let error = model.error {
                     ScrollView { Text(error).font(.caption).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                         .frame(maxHeight: 90).padding(12)
@@ -99,7 +114,7 @@ struct ContentView: View {
                 }
                 usageCards
                 HStack(alignment: .top, spacing: 16) {
-                    categories.frame(width: 310)
+                    ScrollView { categories }.frame(width: 310)
                     resourceList.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.frame(maxHeight: .infinity)
                 if !model.logs.isEmpty {
@@ -160,6 +175,66 @@ struct ContentView: View {
             Button { model.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
                 .controlSize(.large).disabled(model.busy)
         }
+    }
+
+    private var diskOverview: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 9) {
+                Image(systemName: "internaldrive.fill")
+                    .foregroundStyle(teal)
+                Text("系统磁盘").font(.system(size: 13, weight: .semibold))
+                Text(model.disk?.name ?? "macOS 启动磁盘")
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                if let disk = model.disk {
+                    Text("已使用 \(disk.usedFraction.formatted(.percent.precision(.fractionLength(0))))")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(diskColor(disk))
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(diskColor(disk).opacity(0.1), in: Capsule())
+                }
+            }
+            if let disk = model.disk {
+                HStack(alignment: .firstTextBaseline, spacing: 24) {
+                    diskMetric("总容量", bytes: disk.totalBytes)
+                    diskMetric("已使用", bytes: disk.usedBytes)
+                    Spacer(minLength: 0)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("剩余空间").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text(diskBytes(disk.availableBytes))
+                            .font(.system(size: 29, weight: .semibold, design: .rounded))
+                            .foregroundStyle(diskColor(disk)).monospacedDigit()
+                    }
+                }
+                ProgressView(value: disk.usedFraction)
+                    .tint(diskColor(disk))
+                    .accessibilityLabel("系统磁盘占用")
+                    .accessibilityValue(disk.usedFraction.formatted(.percent.precision(.fractionLength(0))))
+                    .help("随扫描和清理更新；可清除空间的计算方式可能与 Finder 不同。")
+            } else {
+                Text(model.diskError ?? "正在读取磁盘容量…")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            }
+        }
+        .padding(18)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(teal.opacity(0.17)))
+    }
+
+    private func diskMetric(_ title: String, bytes: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(diskBytes(bytes)).font(.system(size: 23, weight: .medium, design: .rounded)).monospacedDigit()
+        }
+    }
+
+    private func diskBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .decimal)
+    }
+
+    private func diskColor(_ disk: SystemDisk) -> Color {
+        disk.usedFraction >= 0.95 ? .red : disk.usedFraction >= 0.85 ? .orange : teal
     }
 
     private var usageCards: some View {
