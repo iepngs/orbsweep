@@ -114,7 +114,7 @@ struct ContentView: View {
                 }
                 usageCards
                 HStack(alignment: .top, spacing: 16) {
-                    ScrollView { categories }.frame(width: 310)
+                    categories.frame(width: 310)
                     resourceList.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.frame(maxHeight: .infinity)
                 if !model.logs.isEmpty {
@@ -257,6 +257,18 @@ struct ContentView: View {
     private var categories: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("选择清理类别").font(.system(size: 13, weight: .semibold)).padding(.bottom, 3)
+                .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                categoryOptions.padding(1)
+            }
+            Text("删除容器后才变为空闲的资源，会在下次扫描中显示，需再次确认清理。")
+                .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(3).padding(.top, 4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var categoryOptions: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(CleanupCategory.allCases) { category in
                 HStack(spacing: 10) {
                     Toggle("清理\(category.title)", isOn: Binding(
@@ -280,8 +292,6 @@ struct ContentView: View {
                     .background(focused == category ? teal.opacity(0.09) : Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(focused == category ? teal.opacity(0.4) : .clear))
             }
-            Text("删除容器后才变为空闲的资源，会在下次扫描中显示，需再次确认清理。")
-                .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(3).padding(.top, 4)
         }
     }
 
