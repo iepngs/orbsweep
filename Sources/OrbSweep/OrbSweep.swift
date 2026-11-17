@@ -118,12 +118,7 @@ struct ContentView: View {
                     resourceList.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.frame(maxHeight: .infinity)
                 if !model.logs.isEmpty {
-                    DisclosureGroup("执行记录", isExpanded: $showLogs) {
-                        ScrollView {
-                            Text(model.logs).font(.system(size: 11, design: .monospaced))
-                                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                        }.frame(height: 110).padding(.top, 6)
-                    }
+                    ExecutionLogView(text: model.logs, isRunning: model.busy, isExpanded: $showLogs)
                 }
                 footer
             }
