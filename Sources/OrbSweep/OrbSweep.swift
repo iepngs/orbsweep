@@ -63,7 +63,7 @@ final class CleanupModel: ObservableObject {
                         }
                     }
                 }.value
-                self.snapshot = nil
+                status = "正在更新清理结果…"
                 let fresh = try await Task.detached { try DockerClient().scan() }.value
                 self.snapshot = fresh
                 status = failures == 0 ? "清理完成，已重新扫描" : "清理结束，\(failures) 项未删除，请查看执行记录"
@@ -103,7 +103,7 @@ struct ContentView: View {
     @StoredState private var focused: CleanupCore.Category = .images
     @StoredState private var confirming = false
     @StoredState private var volumeConsent = false
-    @StoredState private var showLogs = false
+    @StoredState private var hasUsedSelectionControl = false
     private let teal = Color(red: 0.12, green: 0.65, blue: 0.57)
 
     var body: some View {
@@ -118,13 +118,14 @@ struct ContentView: View {
                         .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
                 }
                 usageCards
-                HStack(alignment: .top, spacing: 16) {
-                    categories.frame(width: 310)
-                    resourceList.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }.frame(maxHeight: .infinity)
-                if !model.logs.isEmpty {
-                    ExecutionLogView(text: model.logs, isRunning: model.busy, isExpanded: $showLogs)
+                GeometryReader { geometry in
+                    HStack(alignment: .top, spacing: 16) {
+                        categories.frame(width: 310)
+                        resourceList.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
+                ExecutionLogView(text: model.logs, isRunning: model.busy)
                 footer
             }
             .padding(16)
@@ -267,9 +268,13 @@ struct ContentView: View {
                     .foregroundStyle(.primary)
                 Spacer(minLength: 0)
                 Button("全选/反选") {
-                    model.selected = Set(CleanupCategory.allCases).subtracting(model.selected)
+                    let allCategories = Set(CleanupCategory.allCases)
+                    model.selected = hasUsedSelectionControl
+                        ? allCategories.subtracting(model.selected)
+                        : allCategories
+                    hasUsedSelectionControl = true
                 }
-                .help("反转五个类别的勾选状态；未勾选任何类别时全选")
+                .help("首次点击全选五个类别，后续点击反转勾选状态")
             }
             .font(.system(size: 11))
             .buttonStyle(.plain).foregroundStyle(teal)
@@ -277,8 +282,6 @@ struct ContentView: View {
             .padding(.horizontal, 14).padding(.vertical, 9)
             Divider().padding(.horizontal, 16)
             categoryOptions.padding(6)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
             Divider().padding(.horizontal, 16)
             HStack(alignment: .top, spacing: 7) {
                 Image(systemName: "info.circle").foregroundStyle(teal)
@@ -296,7 +299,7 @@ struct ContentView: View {
     }
 
     private var categoryOptions: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(CleanupCategory.allCases) { category in
                 HStack(spacing: 10) {
                     Toggle("清理\(category.title)", isOn: Binding(
@@ -320,6 +323,7 @@ struct ContentView: View {
                     }.buttonStyle(.plain)
                         .help(category == .volumes ? "含永久数据 · 谨慎选择" : category == .containers ? "删除容器内的可写数据" : "点击查看待清理内容")
                 }.padding(.horizontal, 10).padding(.vertical, 6)
+                    .frame(maxHeight: .infinity)
                     .background(focused == category ? teal.opacity(0.09) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(focused == category ? teal.opacity(0.3) : .clear))
             }
@@ -366,13 +370,18 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if model.busy { ProgressView().controlSize(.small) }
+            ProgressView().controlSize(.small)
+                .frame(width: 16, height: 16)
+                .opacity(model.busy ? 1 : 0)
+                .accessibilityHidden(!model.busy)
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.status).font(.system(size: 12, weight: .medium))
-                if let date = model.snapshot?.date {
-                    Text("最近扫描 \(date.formatted(date: .omitted, time: .standard)) · 空间统计包含共享层，不等于实际释放量")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
-                }
+                    .lineLimit(1).help(model.status)
+                Text(model.snapshot.map {
+                    "最近扫描 \($0.date.formatted(date: .omitted, time: .standard)) · 空间统计包含共享层，不等于实际释放量"
+                } ?? "等待扫描结果 · 空间统计包含共享层，不等于实际释放量")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer()
             Button {
@@ -380,7 +389,7 @@ struct ContentView: View {
             } label: { Label("清理所选（\(model.selectionCount)）", systemImage: "trash") }
                 .buttonStyle(.borderedProminent).tint(teal).controlSize(.large)
                 .disabled(model.busy || model.snapshot == nil || model.selectionCount == 0)
-        }.padding(.top, 2)
+        }.frame(height: 40).padding(.top, 2)
     }
 
     private var confirmation: some View {
@@ -405,7 +414,7 @@ struct ContentView: View {
                 Spacer()
                 Button("取消") { confirming = false }.keyboardShortcut(.cancelAction)
                 Button("永久删除", role: .destructive) {
-                    confirming = false; showLogs = true; model.clean()
+                    confirming = false; model.clean()
                 }.disabled(deletesVolumes && !volumeConsent)
             }
         }.padding(28).frame(width: 490)

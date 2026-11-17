@@ -4,30 +4,16 @@ import AppKit
 struct ExecutionLogView: View {
     let text: String
     let isRunning: Bool
-    @Binding var isExpanded: Bool
     private let teal = Color(red: 0.12, green: 0.65, blue: 0.57)
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.16)) { isExpanded.toggle() }
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        Image(systemName: "doc.text").foregroundStyle(teal)
-                        Text("执行记录").font(.system(size: 13, weight: .semibold))
-                        Text(isRunning ? "正在执行…" : "本次清理输出")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                    }.contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("执行记录")
-                .accessibilityValue(isExpanded ? "已展开" : "已收起")
+                Image(systemName: "doc.text").foregroundStyle(teal)
+                Text("执行记录").font(.system(size: 13, weight: .semibold))
+                Text(text.isEmpty ? "等待清理" : isRunning ? "正在执行…" : "本次清理输出")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
 
                 Button {
                     NSPasteboard.general.clearContents()
@@ -39,26 +25,51 @@ struct ExecutionLogView: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .help("复制本次完整执行记录")
+                .disabled(text.isEmpty)
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.vertical, 10)
 
-            if isExpanded {
-                Divider().padding(.horizontal, 14)
-                ScrollView([.vertical, .horizontal]) {
-                    Text(text)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Color.primary.opacity(0.8))
-                        .lineSpacing(4)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: true, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14).padding(.vertical, 12)
-                }
-                .frame(minHeight: 36, idealHeight: 90, maxHeight: 120)
-                .accessibilityLabel("执行记录内容")
+            Divider().padding(.horizontal, 14)
+            // Keep output's intrinsic size out of the dashboard's layout.
+            GeometryReader { geometry in
+                content
+                    .frame(width: geometry.size.width, height: geometry.size.height)
             }
+            .frame(height: 120)
+            .clipped()
         }
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.06)))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if text.isEmpty {
+            HStack(spacing: 12) {
+                Image(systemName: "text.alignleft")
+                    .font(.system(size: 20))
+                    .foregroundStyle(teal.opacity(0.65))
+                    .frame(width: 40, height: 40)
+                    .background(teal.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("暂无执行记录").font(.system(size: 12, weight: .medium))
+                    Text("清理后的执行详情会显示在这里")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView([.vertical, .horizontal]) {
+                Text(text)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.8))
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            .accessibilityLabel("执行记录内容")
+        }
     }
 }
