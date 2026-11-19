@@ -78,14 +78,34 @@ final class CleanupModel: ObservableObject {
     }
 }
 
+@MainActor
+final class OrbSweepAppDelegate: NSObject, NSApplicationDelegate {
+    var openMainWindow: (() -> Void)?
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        guard !hasVisibleWindows, let openMainWindow else { return true }
+        openMainWindow()
+        return false
+    }
+}
+
 @main
 struct OrbSweepApp: App {
+    @NSApplicationDelegateAdaptor(OrbSweepAppDelegate.self) private var appDelegate
     @StateObject private var model = CleanupModel()
     @StateObject private var updater = AppUpdater()
+    @Environment(\.openWindow) private var openWindow
+    private let mainWindowID = "main"
+
     var body: some Scene {
-        WindowGroup("OrbSweep") {
+        WindowGroup("OrbSweep", id: mainWindowID) {
             ContentView(model: model, updater: updater)
                 .frame(minWidth: 1040, minHeight: 740)
+                .onAppear {
+                    appDelegate.openMainWindow = { [openWindow, mainWindowID] in
+                        openWindow(id: mainWindowID)
+                    }
+                }
         }
         .defaultSize(width: 1120, height: 920)
         .commands {
@@ -259,8 +279,7 @@ struct ContentView: View {
     private var usageCards: some View {
         HStack(spacing: 10) {
             ForEach([CleanupCategory.containers, .images, .volumes, .cache]) { category in
-                let type = usageType(category)
-                let usage = model.snapshot?.usage.first { $0.type == type }
+                let usage = model.snapshot?.usage.first { $0.type == category.usageType }
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 5) {
                         Label(category == .containers ? "全部容器" : category.title.replacingOccurrences(of: "未使用", with: ""), systemImage: category.icon)
@@ -387,7 +406,9 @@ struct ContentView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
+        let estimate = model.snapshot?.estimatedReclaimableBytes(for: model.selected)
+        let buttonTitle = estimate.map { "清理所选（约 \(diskBytes($0))）" } ?? "清理所选"
+        return HStack(spacing: 12) {
             ProgressView().controlSize(.small)
                 .frame(width: 16, height: 16)
                 .opacity(model.busy ? 1 : 0)
@@ -404,8 +425,9 @@ struct ContentView: View {
             Spacer()
             Button {
                 volumeConsent = false; confirming = true
-            } label: { Label("清理所选（\(model.selectionCount)）", systemImage: "trash") }
+            } label: { Label(buttonTitle, systemImage: "trash") }
                 .buttonStyle(.borderedProminent).tint(teal).controlSize(.large)
+                .help("根据当前勾选和扫描结果估算可释放空间，实际释放量以清理结果为准。")
                 .disabled(model.busy || model.snapshot == nil || model.selectionCount == 0)
         }.frame(height: 40).padding(.top, 2)
     }
@@ -438,13 +460,4 @@ struct ContentView: View {
         }.padding(28).frame(width: 490)
     }
 
-    private func usageType(_ category: CleanupCategory) -> String {
-        switch category {
-        case .containers: return "Containers"
-        case .images: return "Images"
-        case .volumes: return "Local Volumes"
-        case .cache: return "Build Cache"
-        case .networks: return "Networks"
-        }
-    }
 }

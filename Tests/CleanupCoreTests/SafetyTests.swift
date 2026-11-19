@@ -12,6 +12,7 @@ struct SafetyTests {
         try tests.onlyExitedAndDeadContainersAreCandidates()
         try tests.stoppedContainersStillProtectTheirVolumes()
         tests.resourceDeletionNeverForcesAndPreservesIDsAsArguments()
+        try tests.reclaimableBytesFollowSelectedCandidates()
         tests.diskCapacityHandlesBoundaryValues()
         try tests.systemDiskCanBeReadWithoutDocker()
         try UpdateTests.run()
@@ -50,6 +51,28 @@ struct SafetyTests {
             expect(command.last == "some name; echo unsafe")
         }
         expect(Safety.removalCommand(.cache, id: "cache") == nil)
+    }
+
+    func reclaimableBytesFollowSelectedCandidates() throws {
+        let data = """
+        [
+          {"Type":"Images","Size":"8GB","Reclaimable":"1.25GB (15%)","TotalCount":"4"},
+          {"Type":"Local Volumes","Size":"10MB","Reclaimable":"400 kB (4%)","TotalCount":"2"},
+          {"Type":"Build Cache","Size":"5GB","Reclaimable":"2.5MB","TotalCount":"10"}
+        ]
+        """
+        var snapshot = Snapshot()
+        snapshot.usage = try JSONDecoder().decode([Usage].self, from: Data(data.utf8))
+        for category in [Category.images, .volumes, .containers, .networks] {
+            snapshot.resources[category] = [Resource(id: category.id, name: category.title)]
+        }
+        snapshot.stoppedContainerBytes = 60
+        expect(snapshot.estimatedReclaimableBytes(for: [.images, .volumes, .containers]) == 1_250_400_060)
+        expect(snapshot.estimatedReclaimableBytes(for: [.networks, .cache]) == 0)
+        snapshot.resources[.cache] = [Resource(id: "cache", name: "cache")]
+        expect(snapshot.estimatedReclaimableBytes(for: [.cache]) == 2_500_000)
+        snapshot.stoppedContainerBytes = nil
+        expect(snapshot.estimatedReclaimableBytes(for: [.images, .containers]) == nil)
     }
 
     func liveReadOnlyScan() throws {

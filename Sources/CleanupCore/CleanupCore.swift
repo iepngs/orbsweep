@@ -30,6 +30,15 @@ public enum Category: String, CaseIterable, Identifiable, Sendable {
         case .cache: return "清理时由 Docker 判断可回收的构建缓存；后续构建可能变慢。"
         }
     }
+    public var usageType: String {
+        switch self {
+        case .containers: return "Containers"
+        case .images: return "Images"
+        case .volumes: return "Local Volumes"
+        case .cache: return "Build Cache"
+        case .networks: return "Networks"
+        }
+    }
 }
 
 public struct Resource: Identifiable, Sendable {
@@ -49,14 +58,42 @@ public struct Usage: Decodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case type = "Type", size = "Size", reclaimable = "Reclaimable", totalCount = "TotalCount"
     }
+
+    fileprivate var reclaimableBytes: Int64? {
+        let size = reclaimable.prefix { $0 != "(" }.trimmingCharacters(in: .whitespaces)
+        let number = size.prefix { $0.isNumber || $0 == "." }
+        let unit = size.dropFirst(number.count).trimmingCharacters(in: .whitespaces).lowercased()
+        let units = ["b", "kb", "mb", "gb", "tb", "pb", "eb"]
+        guard let value = Double(number), let exponent = units.firstIndex(of: unit) else { return nil }
+        return Int64(exactly: (value * pow(1000, Double(exponent))).rounded())
+    }
 }
 
 public struct Snapshot: Sendable {
     public var resources: [Category: [Resource]] = [:]
     public var usage: [Usage] = []
+    public var stoppedContainerBytes: Int64?
     public var date = Date()
     public init() {}
     public subscript(_ category: Category) -> [Resource] { resources[category] ?? [] }
+
+    public func estimatedReclaimableBytes(for categories: Set<Category>) -> Int64? {
+        var total: Int64 = 0
+        for category in categories where !self[category].isEmpty {
+            let bytes: Int64?
+            switch category {
+            case .containers: bytes = stoppedContainerBytes
+            case .networks: bytes = 0
+            case .images, .volumes, .cache:
+                bytes = usage.first { $0.type == category.usageType }?.reclaimableBytes
+            }
+            guard let bytes else { return nil }
+            let (sum, overflow) = total.addingReportingOverflow(bytes)
+            guard !overflow else { return nil }
+            total = sum
+        }
+        return total
+    }
 }
 
 public struct Container: Decodable, Sendable {
@@ -157,11 +194,21 @@ public struct DockerClient: Sendable {
         return try decode([Container].self, run(["container", "inspect"] + ids))
     }
 
+    private func stoppedContainerBytes(_ candidates: [Resource]) throws -> Int64? {
+        guard !candidates.isEmpty else { return 0 }
+        struct ContainerSize: Decodable { let SizeRw: Int64? }
+        let sizes = try decode([ContainerSize].self, run(["container", "inspect", "--size"] + candidates.map(\.id)))
+        let knownSizes = sizes.compactMap(\.SizeRw).filter { $0 >= 0 }
+        guard knownSizes.count == candidates.count else { return nil }
+        return knownSizes.reduce(0, +)
+    }
+
     public func scan() throws -> Snapshot {
         try run(["info", "--format", "{{.ServerVersion}}"])
         var snapshot = Snapshot()
         let containers = try containers()
         snapshot.resources[.containers] = Safety.stopped(containers)
+        snapshot.stoppedContainerBytes = try? stoppedContainerBytes(snapshot[.containers])
         let volumes = try lines(["volume", "ls", "--quiet"])
         snapshot.resources[.volumes] = Safety.unusedVolumes(volumes, containers: containers)
 
@@ -186,7 +233,7 @@ public struct DockerClient: Sendable {
         }.map { Resource(id: $0.Id, name: $0.Name) }
         snapshot.usage = try lines(["system", "df", "--format", "{{json .}}"])
             .map { try decode(Usage.self, $0) }
-        if let cache = snapshot.usage.first(where: { $0.type == "Build Cache" }), cache.totalCount != "0" {
+        if let cache = snapshot.usage.first(where: { $0.type == Category.cache.usageType }), cache.totalCount != "0" {
             snapshot.resources[.cache] = [Resource(id: "cache", name: "Docker 默认构建缓存", detail: "可回收 \(cache.reclaimable)")]
         }
         snapshot.date = Date()
